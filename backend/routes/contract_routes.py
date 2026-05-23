@@ -7,11 +7,16 @@ import os
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form
+from pydantic import BaseModel
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 
-from services.pdf_service import extract_text_from_pdf
-from services.ocr_service import ocr_image_to_text
+
+class TextRequest(BaseModel):
+    text: str
+
+from services.extractor_service import extract_text_from_pdf
+from services.ocr_service import ocr_image
 from services.cleaner_service import clean_text
 from services.contract_analyzer import analyze_contract
 
@@ -70,7 +75,7 @@ async def analyze(file: UploadFile = File(...)):
         if file.content_type == "application/pdf":
             raw_text = extract_text_from_pdf(str(save_path))
         elif file.content_type.startswith("image/"):
-            raw_text = ocr_image_to_text(str(save_path), use_gpu=False)
+            raw_text = ocr_image(str(save_path), lang="en")
         elif file.content_type == "text/plain":
             raw_text = content.decode("utf-8")
         else:
@@ -96,6 +101,32 @@ async def analyze(file: UploadFile = File(...)):
         "file_id": file_id,
         "filename": file.filename,
         "text_length": len(cleaned_text),
+        "analysis": result,
+    }
+
+
+@router.post("/analyze-text")
+async def analyze_text(req: TextRequest):
+    """
+    分析纯文本合同（不上传文件，直接粘贴文本）
+    """
+    text = req.text.strip()
+    if not text:
+        raise HTTPException(400, "合同文本不能为空")
+    if len(text) < 50:
+        raise HTTPException(400, "合同文本太短（至少50个字符）")
+
+    # LLM 直接分析
+    api_key, api_base, model = _get_llm_config()
+    try:
+        result = analyze_contract(text, api_key, api_base, model)
+    except Exception as e:
+        raise HTTPException(500, f"AI 分析失败：{str(e)}")
+
+    return {
+        "file_id": "pasted",
+        "filename": "pasted-text.txt",
+        "text_length": len(text),
         "analysis": result,
     }
 

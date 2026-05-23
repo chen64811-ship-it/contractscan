@@ -10,7 +10,7 @@ uvicorn[standard]==0.30.0
 
 # File Processing
 paddleocr==2.7.3
-paddlepaddle-gpu==2.6.2
+# paddlepaddle 单独安装，见下方命令
 pdfminer.six==20231228
 pymupdf==1.23.26
 python-docx==1.1.2

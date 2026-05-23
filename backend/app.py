@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from routes.contract_routes import router as contract_router
@@ -33,29 +32,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册 API 路由
+# 注册 API 路由（必须在页面路由之前）
 app.include_router(contract_router)
 
-# 静态文件（前端）
+# 前端页面
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
-FRONTEND_DIR.mkdir(exist_ok=True)
 
-if FRONTEND_DIR.exists():
-    # 挂载前端静态资源（CSS / JS / 图片）
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
-    @app.get("/")
-    async def index():
-        """返回前端页面"""
-        return FileResponse(str(FRONTEND_DIR / "index.html"))
-
-    @app.get("/{filename:path}")
-    async def serve_frontend(filename: str):
-        """处理前端路由（非 API 路径都返回前端页面）"""
-        file_path = FRONTEND_DIR / filename
-        if file_path.exists() and file_path.is_file():
-            return FileResponse(str(file_path))
-        return FileResponse(str(FRONTEND_DIR / "index.html"))
+@app.get("/")
+async def index():
+    """返回前端页面"""
+    return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
 if __name__ == "__main__":

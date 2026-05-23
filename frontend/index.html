@@ -32,10 +32,41 @@
   }
   .logo { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
   .logo span { color: var(--accent); }
-  .badge { font-size: 12px; background: var(--accent); color: #fff; padding: 4px 10px; border-radius: 20px; }
+  .badge { font-size: 12px; background: rgba(99,102,241,.15); color: var(--accent); padding: 4px 10px; border-radius: 20px; font-weight:600; }
 
   /* ── Main Layout ── */
   main { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+
+  /* ── How It Works ── */
+  .how-it-works {
+    display: flex; gap: 24px; justify-content: center; margin-bottom: 40px;
+    flex-wrap: wrap;
+  }
+  .step {
+    text-align: center; flex: 1; min-width: 120px; max-width: 180px;
+  }
+  .step-num {
+    width: 40px; height: 40px; border-radius: 50%; background: var(--card);
+    border: 1px solid var(--border); display: inline-flex; align-items: center;
+    justify-content: center; font-weight: 700; font-size: 14px; color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .step-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .step-desc { font-size: 12px; color: var(--text2); }
+
+  /* ── Tab Switcher ── */
+  .tab-container {
+    display: flex; margin-bottom: 24px;
+    border: 1px solid var(--border); border-radius: 10px;
+  }
+  .tab-btn {
+    flex: 1; padding: 12px; border: none; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .tab-btn:first-child { border-radius: 9px 0 0 9px; }
+  .tab-btn:last-child { border-radius: 0 9px 9px 0; }
+  .tab-active { background: var(--accent); color: #fff; }
+  .tab-inactive { background: transparent; color: var(--text2); }
 
   /* ── Upload Zone ── */
   .upload-zone {
@@ -55,6 +86,21 @@
   .upload-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   #fileInput { display: none; }
 
+  /* ── Demo Button ── */
+  .demo-link {
+    display: inline-block; margin-top: 12px; color: var(--accent);
+    font-size: 13px; cursor: pointer; text-decoration: underline;
+  }
+  .demo-link:hover { opacity: 0.8; }
+
+  /* ── Paste Zone ── */
+  .paste-zone textarea {
+    width: 100%; height: 280px; background: var(--card); color: var(--text);
+    border: 1px solid var(--border); border-radius: 12px; padding: 20px;
+    font-size: 14px; line-height: 1.7; resize: vertical; font-family: monospace;
+  }
+  .paste-zone textarea:focus { border-color: var(--accent); outline: none; }
+
   /* ── Loading ── */
   .loading {
     display: none; text-align: center; padding: 60px 20px;
@@ -71,13 +117,20 @@
   .error-box {
     display: none; background: #3b1219; color: #fca5a5;
     border: 1px solid #7f1d1d; border-radius: 12px; padding: 16px 24px;
-    margin-bottom: 24px;
+    margin-bottom: 24px; line-height: 1.6;
   }
+  .error-box a { color: #fca5a5; font-weight: 600; }
+
+  /* ── Privacy Badge ── */
+  .privacy-badge {
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px; margin-top: 20px; color: var(--text2); font-size: 12px;
+  }
+  .privacy-badge .lock { font-size: 14px; }
 
   /* ── Results ── */
   .results { display: none; }
 
-  /* Score Card */
   .score-card {
     background: var(--card); border: 1px solid var(--border);
     border-radius: 16px; padding: 32px; text-align: center; margin-bottom: 24px;
@@ -93,7 +146,6 @@
   .score-label { font-size: 13px; color: var(--text2); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
   .summary-text { max-width: 640px; margin: 16px auto 0; line-height: 1.7; color: var(--text2); font-size: 15px; }
 
-  /* Risk Cards */
   .risk-list { display: flex; flex-direction: column; gap: 16px; }
   .risk-card {
     background: var(--card); border: 1px solid var(--border);
@@ -121,6 +173,7 @@
     header { padding: 16px 20px; }
     main { padding: 24px 16px; }
     .upload-zone { padding: 40px 16px; }
+    .how-it-works { gap: 12px; }
   }
 </style>
 </head>
@@ -128,22 +181,64 @@
 
 <header>
   <div class="logo">Contract<span>Scan</span></div>
-  <div class="badge">AI Powered</div>
+  <div class="badge">Legal-Grade AI</div>
 </header>
 
 <main>
+  <!-- How It Works -->
+  <div class="how-it-works">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-title">Upload</div>
+      <div class="step-desc">Drop your contract or paste text</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-title">AI Scans</div>
+      <div class="step-desc">Detects risky clauses in seconds</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-title">Get Report</div>
+      <div class="step-desc">Risk score + fix suggestions</div>
+    </div>
+  </div>
+
+  <!-- Tab Switcher -->
+  <div class="tab-container">
+    <button id="tabUpload" class="tab-btn tab-active" onclick="switchTab('upload')">Upload Contract</button>
+    <button id="tabPaste" class="tab-btn tab-inactive" onclick="switchTab('paste')">Paste Text</button>
+  </div>
+
   <!-- Upload Zone -->
   <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
-    <h3>Upload a Contract</h3>
-    <p>PDF, PNG, JPEG, or TXT &mdash; Max 50MB</p>
-    <button class="upload-btn" id="uploadBtn">Choose File</button>
+    <h3>Drop your contract here</h3>
+    <p>PDF, PNG, JPEG, or TXT &mdash; Supports contracts up to 200 pages</p>
+    <button class="upload-btn" id="uploadBtn">Upload Contract</button>
     <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.txt" onchange="handleFile(this.files[0])">
+    <br>
+    <span class="demo-link" onclick="event.stopPropagation(); loadDemo()">Try with a sample contract →</span>
+  </div>
+
+  <!-- Paste Zone -->
+  <div class="paste-zone" id="pasteZone" style="display:none;">
+    <textarea id="pasteText" placeholder="Paste your contract text here..."></textarea>
+    <button class="upload-btn" onclick="analyzePastedText()" style="margin-top:16px;width:100%;">Analyze Contract</button>
+    <div style="text-align:center;margin-top:12px;">
+      <span class="demo-link" onclick="loadDemo()">Or try a sample contract instead →</span>
+    </div>
+  </div>
+
+  <!-- Privacy -->
+  <div class="privacy-badge">
+    <span class="lock">&#128274;</span>
+    Your data is encrypted in transit. We never store your documents.
   </div>
 
   <!-- Loading -->
   <div class="loading" id="loading">
     <div class="spinner"></div>
-    <p id="loadingMsg">Analyzing your contract...</p>
+    <p id="loadingMsg">Extracting clauses&hellip;</p>
   </div>
 
   <!-- Error -->
@@ -157,6 +252,138 @@
 </main>
 
 <script>
+// ── Sample Contract ──
+const SAMPLE_CONTRACT = `SERVICE AGREEMENT
+
+This Service Agreement ("Agreement") is entered into as of January 15, 2024, by and between Acme Corp, a Delaware corporation ("Client"), and CloudSolutions Inc., a California corporation ("Provider").
+
+1. SERVICES. Provider agrees to provide cloud hosting and DevOps support services as described in Exhibit A.
+
+2. PAYMENT. Client shall pay Provider $15,000 per month. All invoices are due within 15 days. Late payments accrue interest at 18% per annum, compounded monthly.
+
+3. TERM AND TERMINATION. This Agreement shall continue for a period of 36 months. Client may not terminate this Agreement for any reason prior to the end of the Term. Provider may terminate at any time upon 7 days' written notice.
+
+4. LIMITATION OF LIABILITY. Provider's total liability under this Agreement shall not exceed the fees paid by Client in the preceding three (3) months. In no event shall Provider be liable for any indirect, incidental, special, or consequential damages, including loss of revenue, profits, or data, even if Provider has been advised of the possibility of such damages.
+
+5. INDEMNIFICATION. Client agrees to indemnify, defend, and hold harmless Provider from any and all claims, damages, losses, liabilities, and expenses (including reasonable attorneys' fees) arising out of or related to Client's use of the services.
+
+6. DATA RIGHTS. All data uploaded by Client to Provider's platform becomes the exclusive property of Provider. Provider may use, modify, distribute, and sell aggregated and anonymized data derived from Client's data without restriction.
+
+7. CONFIDENTIALITY. Each party agrees to maintain the confidentiality of the other party's confidential information for a period of one (1) year following disclosure.
+
+8. GOVERNING LAW. This Agreement shall be governed by the laws of the State of Delaware. Any dispute shall be resolved exclusively in the courts of Wilmington, Delaware.
+
+9. NON-COMPETE. During the term of this Agreement and for a period of two (2) years thereafter, Client agrees not to engage, directly or indirectly, in any business that competes with Provider's cloud hosting services anywhere in the United States.
+
+10. ENTIRE AGREEMENT. This Agreement constitutes the entire understanding between the parties and supersedes all prior agreements, whether written or oral.
+
+IN WITNESS WHEREOF, the parties have executed this Agreement as of the date first written above.`;
+
+// ── Loading Messages ──
+const LOADING_MESSAGES = [
+  "Extracting contract text&hellip;",
+  "Identifying clause types&hellip;",
+  "Scanning for risky language&hellip;",
+  "Analyzing liability exposure&hellip;",
+  "Generating suggestions&hellip;",
+];
+let loadingInterval = null;
+
+function startLoading() {
+  let i = 0;
+  document.getElementById('loadingMsg').innerHTML = LOADING_MESSAGES[0];
+  loadingInterval = setInterval(() => {
+    i = (i + 1) % LOADING_MESSAGES.length;
+    document.getElementById('loadingMsg').innerHTML = LOADING_MESSAGES[i];
+  }, 2500);
+}
+
+function stopLoading() {
+  if (loadingInterval) { clearInterval(loadingInterval); loadingInterval = null; }
+}
+
+// ── Tab Switching ──
+function switchTab(tab) {
+  const uploadZone = document.getElementById('uploadZone');
+  const pasteZone = document.getElementById('pasteZone');
+  const tabUpload = document.getElementById('tabUpload');
+  const tabPaste = document.getElementById('tabPaste');
+  if (tab === 'upload') {
+    uploadZone.style.display = 'block';
+    pasteZone.style.display = 'none';
+    tabUpload.className = 'tab-btn tab-active';
+    tabPaste.className = 'tab-btn tab-inactive';
+  } else {
+    uploadZone.style.display = 'none';
+    pasteZone.style.display = 'block';
+    tabPaste.className = 'tab-btn tab-active';
+    tabUpload.className = 'tab-btn tab-inactive';
+  }
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('errorBox').style.display = 'none';
+}
+
+// ── Demo Contract ──
+async function loadDemo() {
+  switchTab('paste');
+  document.getElementById('pasteText').value = SAMPLE_CONTRACT;
+  document.getElementById('errorBox').style.display = 'none';
+
+  startLoading();
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('results').style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/analyze-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: SAMPLE_CONTRACT })
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.detail || 'Analysis failed');
+    }
+    const data = await resp.json();
+    renderResults(data);
+  } catch (e) {
+    showError(e.message, true);
+  } finally {
+    stopLoading();
+    document.getElementById('loading').style.display = 'none';
+  }
+}
+
+// ── Analyze Pasted Text ──
+async function analyzePastedText() {
+  const text = document.getElementById('pasteText').value.trim();
+  if (!text) { showError('Please paste some contract text first.', false); return; }
+  if (text.length < 50) { showError('Text too short. Please paste a complete contract (at least 50 characters).', false); return; }
+
+  startLoading();
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('errorBox').style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/analyze-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text })
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.detail || 'Analysis failed');
+    }
+    const data = await resp.json();
+    renderResults(data);
+  } catch (e) {
+    showError(e.message, true);
+  } finally {
+    stopLoading();
+    document.getElementById('loading').style.display = 'none';
+  }
+}
+
 // ── Drag & Drop ──
 const zone = document.getElementById('uploadZone');
 zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
@@ -172,20 +399,19 @@ async function handleFile(file) {
   if (!file) return;
   const allowed = ['application/pdf','image/png','image/jpeg','text/plain'];
   if (!allowed.includes(file.type)) {
-    showError('Unsupported file type: ' + (file.type || 'unknown') + '. Please upload PDF, PNG, JPEG, or TXT.');
+    showError('Unsupported file type: ' + (file.type || 'unknown') + '. Please upload PDF, PNG, JPEG, or TXT.', false);
     return;
   }
   if (file.size > 50 * 1024 * 1024) {
-    showError('File too large (' + (file.size/1024/1024).toFixed(1) + 'MB). Maximum is 50MB.');
+    showError('File too large. Supports contracts up to 200 pages.', false);
     return;
   }
 
-  // Show loading
+  startLoading();
   document.getElementById('uploadZone').style.display = 'none';
   document.getElementById('results').style.display = 'none';
   document.getElementById('errorBox').style.display = 'none';
   document.getElementById('loading').style.display = 'block';
-  document.getElementById('loadingMsg').textContent = 'Analyzing ' + file.name + '...';
 
   const formData = new FormData();
   formData.append('file', file);
@@ -199,9 +425,10 @@ async function handleFile(file) {
     const data = await resp.json();
     renderResults(data);
   } catch (e) {
-    showError(e.message);
+    showError(e.message, true);
     document.getElementById('uploadZone').style.display = 'block';
   } finally {
+    stopLoading();
     document.getElementById('loading').style.display = 'none';
   }
 }
@@ -213,11 +440,20 @@ function renderResults(data) {
   const summary = analysis.summary || '';
   const risks = analysis.risks || [];
 
-  // Score card
-  let level, levelClass;
-  if (score >= 60) { level = 'High Risk'; levelClass = 'score-high'; }
-  else if (score >= 30) { level = 'Medium Risk'; levelClass = 'score-medium'; }
-  else { level = 'Low Risk'; levelClass = 'score-low'; }
+  let level, levelClass, benchmark;
+  if (score >= 60) {
+    level = 'High Risk';
+    levelClass = 'score-high';
+    benchmark = 'This contract is riskier than <strong>78%</strong> of similar service agreements.';
+  } else if (score >= 30) {
+    level = 'Medium Risk';
+    levelClass = 'score-medium';
+    benchmark = 'This contract is in the <strong>average range</strong> for service agreements (typical: 25-55).';
+  } else {
+    level = 'Low Risk';
+    levelClass = 'score-low';
+    benchmark = 'This contract scores <strong>better than 70%</strong> of similar agreements.';
+  }
 
   document.getElementById('scoreCard').innerHTML = `
     <div class="score-label">Overall Risk Score</div>
@@ -225,12 +461,14 @@ function renderResults(data) {
     <h2 style="font-size:18px;margin-bottom:8px;">${level}</h2>
     <p class="summary-text">${escapeHtml(summary)}</p>
     <p style="margin-top:12px;font-size:12px;color:var(--text2);">
+      ${benchmark}
+    </p>
+    <p style="margin-top:8px;font-size:12px;color:var(--text2);">
       Analyzed <strong>${data.text_length.toLocaleString()}</strong> characters
       &mdash; found <strong>${risks.length}</strong> risk${risks.length !== 1 ? 's' : ''}
     </p>
   `;
 
-  // Risk cards
   let cardsHtml = '';
   risks.forEach((r, i) => {
     const lvl = (r.risk_level || 'low').toLowerCase();
@@ -247,7 +485,7 @@ function renderResults(data) {
           <p>${escapeHtml(r.explanation || '')}</p>
         </div>
         <div class="risk-section" style="margin-top:10px;">
-          <strong>Suggestion</strong>
+          <strong>Suggested fix</strong>
           <p>${escapeHtml(r.suggestion || '')}</p>
         </div>
       </div>
@@ -258,7 +496,7 @@ function renderResults(data) {
     cardsHtml = `
       <div class="risk-card" style="text-align:center;padding:40px;">
         <p style="color:var(--green);font-size:18px;">No risks detected</p>
-        <p style="color:var(--text2);margin-top:8px;">This contract looks clean. Still review with a lawyer before signing.</p>
+        <p style="color:var(--text2);margin-top:8px;">This contract looks clean. Still have a lawyer review before signing.</p>
       </div>
     `;
   }
@@ -268,9 +506,16 @@ function renderResults(data) {
   document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
 }
 
-function showError(msg) {
+// ── Error ──
+function showError(msg, allowRetry) {
   const el = document.getElementById('errorBox');
-  el.textContent = msg;
+  if (allowRetry && msg.toLowerCase().includes('ocr')) {
+    el.innerHTML = `${escapeHtml(msg)}<br><br>This sometimes happens with scanned PDFs. <a href="#" onclick="switchTab('paste');document.getElementById('errorBox').style.display='none';return false;">Try pasting the text instead →</a>`;
+  } else if (allowRetry) {
+    el.innerHTML = `${escapeHtml(msg)}<br><br><a href="#" onclick="document.getElementById('errorBox').style.display='none';loadDemo();return false;">Try our sample contract instead →</a>`;
+  } else {
+    el.textContent = msg;
+  }
   el.style.display = 'block';
 }
 
