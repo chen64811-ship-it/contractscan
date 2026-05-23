@@ -121,6 +121,39 @@
   }
   .error-box a { color: #fca5a5; font-weight: 600; }
 
+  /* ── Missing Clause Cards ── */
+  .missing-card {
+    background: var(--card); border: 1px dashed var(--border);
+    border-radius: 12px; padding: 24px;
+  }
+  .missing-card .clause-name {
+    font-size: 15px; font-weight: 700; color: var(--text);
+    margin-bottom: 8px;
+  }
+  .section-title {
+    font-size: 16px; font-weight: 700; color: var(--text);
+    margin-bottom: 16px; margin-top: 32px;
+  }
+  .section-title:first-child { margin-top: 0; }
+
+  /* ── Action Bar ── */
+  .action-bar {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border);
+  }
+  .action-btn {
+    padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600;
+    cursor: pointer; border: none; transition: opacity 0.2s;
+  }
+  .action-btn.primary { background: var(--accent); color: #fff; }
+  .action-btn.secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+  .action-btn:hover { opacity: 0.85; }
+  .copied-toast {
+    display: none; position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--green); color: #fff; padding: 12px 24px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; z-index: 100;
+  }
+
   /* ── Privacy Badge ── */
   .privacy-badge {
     display: flex; align-items: center; justify-content: center;
@@ -248,7 +281,14 @@
   <div class="results" id="results">
     <div class="score-card" id="scoreCard"></div>
     <div class="risk-list" id="riskList"></div>
+    <div class="action-bar" id="actionBar" style="display:none;">
+      <button class="action-btn primary" onclick="copyReport()">Copy Report</button>
+      <button class="action-btn secondary" onclick="analyzeAnother()">Analyze Another Contract</button>
+    </div>
   </div>
+
+  <!-- Copied Toast -->
+  <div class="copied-toast" id="copiedToast">Copied to clipboard!</div>
 </main>
 
 <script>
@@ -285,6 +325,7 @@ const LOADING_MESSAGES = [
   "Identifying clause types&hellip;",
   "Scanning for risky language&hellip;",
   "Analyzing liability exposure&hellip;",
+  "Checking for missing clauses&hellip;",
   "Generating suggestions&hellip;",
 ];
 let loadingInterval = null;
@@ -439,21 +480,28 @@ function renderResults(data) {
   const score = analysis.overall_risk_score || 0;
   const summary = analysis.summary || '';
   const risks = analysis.risks || [];
+  const missing = analysis.missing_clauses || [];
+  const totalIssues = risks.length + missing.length;
 
   let level, levelClass, benchmark;
   if (score >= 60) {
     level = 'High Risk';
     levelClass = 'score-high';
-    benchmark = 'This contract is riskier than <strong>78%</strong> of similar service agreements.';
+    benchmark = 'This contract scores <strong>higher than 78%</strong> of similar agreements reviewed.';
   } else if (score >= 30) {
     level = 'Medium Risk';
     levelClass = 'score-medium';
-    benchmark = 'This contract is in the <strong>average range</strong> for service agreements (typical: 25-55).';
+    benchmark = 'This contract is in the <strong>average range</strong> for service agreements (typical: 25–55).';
   } else {
     level = 'Low Risk';
     levelClass = 'score-low';
     benchmark = 'This contract scores <strong>better than 70%</strong> of similar agreements.';
   }
+
+  const issueBreakdown = [
+    risks.length > 0 ? `<strong>${risks.length}</strong> clause issue${risks.length !== 1 ? 's' : ''}` : '',
+    missing.length > 0 ? `<strong>${missing.length}</strong> missing provision${missing.length !== 1 ? 's' : ''}` : '',
+  ].filter(Boolean).join(' &mdash; ');
 
   document.getElementById('scoreCard').innerHTML = `
     <div class="score-label">Overall Risk Score</div>
@@ -464,46 +512,101 @@ function renderResults(data) {
       ${benchmark}
     </p>
     <p style="margin-top:8px;font-size:12px;color:var(--text2);">
-      Analyzed <strong>${data.text_length.toLocaleString()}</strong> characters
-      &mdash; found <strong>${risks.length}</strong> risk${risks.length !== 1 ? 's' : ''}
+      Found ${issueBreakdown || 'no issues'}
+      &mdash; from ${data.text_length.toLocaleString()} characters
     </p>
   `;
 
-  let cardsHtml = '';
-  risks.forEach((r, i) => {
-    const lvl = (r.risk_level || 'low').toLowerCase();
-    const lvlClass = lvl === 'high' ? 'level-high' : lvl === 'medium' ? 'level-medium' : 'level-low';
-    cardsHtml += `
-      <div class="risk-card">
-        <div class="risk-header">
-          <span class="risk-level ${lvlClass}">${lvl.toUpperCase()} Risk</span>
-          <span style="color:var(--text2);font-size:13px;">#${i+1}</span>
-        </div>
-        <div class="clause-quote">${escapeHtml(r.clause_text || '')}</div>
-        <div class="risk-section">
-          <strong>What this means</strong>
-          <p>${escapeHtml(r.explanation || '')}</p>
-        </div>
-        <div class="risk-section" style="margin-top:10px;">
-          <strong>Suggested fix</strong>
-          <p>${escapeHtml(r.suggestion || '')}</p>
-        </div>
-      </div>
-    `;
-  });
+  // Build risk cards + missing clause cards
+  let html = '';
 
-  if (cardsHtml === '') {
-    cardsHtml = `
+  // Section: Clause Issues
+  if (risks.length > 0) {
+    html += '<div class="section-title">Clause Issues</div>';
+    risks.forEach((r, i) => {
+      const lvl = (r.risk_level || 'low').toLowerCase();
+      const lvlClass = lvl === 'high' ? 'level-high' : lvl === 'medium' ? 'level-medium' : 'level-low';
+      html += `
+        <div class="risk-card">
+          <div class="risk-header">
+            <span class="risk-level ${lvlClass}">${lvl.toUpperCase()}</span>
+            <span style="color:var(--text2);font-size:13px;">#${i+1}</span>
+          </div>
+          <div class="clause-quote">${escapeHtml(r.clause_text || '')}</div>
+          <div class="risk-section">
+            <strong>What this means</strong>
+            <p>${escapeHtml(r.explanation || '')}</p>
+          </div>
+          <div class="risk-section" style="margin-top:10px;">
+            <strong>Suggested fix</strong>
+            <p>${escapeHtml(r.suggestion || '')}</p>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  // Section: Missing Provisions
+  if (missing.length > 0) {
+    html += '<div class="section-title">Missing Provisions</div>';
+    missing.forEach((m, i) => {
+      const lvl = (m.risk_level || 'low').toLowerCase();
+      const lvlClass = lvl === 'high' ? 'level-high' : lvl === 'medium' ? 'level-medium' : 'level-low';
+      html += `
+        <div class="missing-card">
+          <div class="risk-header" style="margin-bottom:8px;">
+            <span class="risk-level ${lvlClass}">MISSING</span>
+            <span class="clause-name">${escapeHtml(m.clause_name || 'Unnamed Clause')}</span>
+          </div>
+          <div class="risk-section">
+            <strong>Why this matters</strong>
+            <p>${escapeHtml(m.why_matters || '')}</p>
+          </div>
+          <div class="risk-section" style="margin-top:10px;">
+            <strong>Suggested language</strong>
+            <p style="font-style:italic;color:#c0c4d8;">${escapeHtml(m.suggested_language || '')}</p>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  if (html === '') {
+    html = `
       <div class="risk-card" style="text-align:center;padding:40px;">
-        <p style="color:var(--green);font-size:18px;">No risks detected</p>
-        <p style="color:var(--text2);margin-top:8px;">This contract looks clean. Still have a lawyer review before signing.</p>
+        <p style="color:var(--green);font-size:18px;">No issues detected</p>
+        <p style="color:var(--text2);margin-top:8px;">This contract appears complete and balanced. Still review with counsel before signing.</p>
       </div>
     `;
   }
 
-  document.getElementById('riskList').innerHTML = cardsHtml;
+  document.getElementById('riskList').innerHTML = html;
+  document.getElementById('actionBar').style.display = 'flex';
   document.getElementById('results').style.display = 'block';
   document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ── Copy Report ──
+function copyReport() {
+  const scoreEl = document.getElementById('scoreCard');
+  const listEl = document.getElementById('riskList');
+  const text = scoreEl.innerText + '\n\n' + listEl.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const toast = document.getElementById('copiedToast');
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 2000);
+  });
+}
+
+// ── Analyze Another ──
+function analyzeAnother() {
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('errorBox').style.display = 'none';
+  document.getElementById('pasteZone').style.display = 'none';
+  document.getElementById('uploadZone').style.display = 'block';
+  document.getElementById('tabUpload').className = 'tab-btn tab-active';
+  document.getElementById('tabPaste').className = 'tab-btn tab-inactive';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ── Error ──
