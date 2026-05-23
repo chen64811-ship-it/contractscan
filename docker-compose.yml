@@ -1,0 +1,19 @@
+# ============================================================
+# ContractScan Docker Compose
+# Usage: docker-compose up -d
+# ============================================================
+
+services:
+  contractscan:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: contractscan
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+      - ./backend/.env:/app/backend/.env:ro
+    env_file: ./backend/.env
+    restart: unless-stopped

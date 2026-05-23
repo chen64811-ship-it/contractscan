@@ -1,0 +1,59 @@
+# ============================================================
+# DocClean Docker Image (GPU version)
+# Use case: machines with NVIDIA GPU for accelerated OCR
+#
+# Prerequisites (host machine):
+#   1. NVIDIA GPU driver (version >= 525)
+#   2. nvidia-container-toolkit
+#      https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+#
+# Start: docker-compose --profile gpu up -d
+# ============================================================
+
+FROM nvidia/cuda:11.8-cudnn8-runtime-ubuntu22.04
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Install Python 3.10 + system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    fonts-wqy-microhei \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.10 /usr/bin/python \
+    && ln -sf /usr/bin/python3.10 /usr/bin/python3
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependency file first (leverage Docker layer caching)
+COPY backend/requirements.txt /app/requirements.txt
+
+# Install Python dependencies
+# requirements.txt has paddlepaddle-gpu for Windows/CUDA 12
+# Docker uses CUDA 11.8 base image, must replace with post118 version
+RUN sed -i '/paddlepaddle-gpu/d' /app/requirements.txt && \
+    pip install --no-cache-dir paddlepaddle-gpu==2.6.2.post118 && \
+    pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy entire project
+COPY . /app/
+
+# Create required directories
+RUN mkdir -p /app/uploads /app/outputs
+
+# Expose port
+EXPOSE 5000
+
+# Start command
+CMD ["python", "backend/app.py"]

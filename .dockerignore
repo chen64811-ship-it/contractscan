@@ -1,0 +1,51 @@
+# ─── Python 缓存 ───
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# ─── 虚拟环境 ───
+venv/
+.venv/
+env/
+
+# ─── 上传和输出（运行时挂载，不需要打包进镜像）───
+uploads/*
+outputs/*
+
+# ─── 数据库文件（每个环境独立）───
+*.db
+*.sqlite3
+
+# ─── Git ───
+.git/
+.gitignore
+
+# ─── IDE ───
+.vscode/
+.idea/
+
+# ─── 测试文件 ───
+test
+test*.py
+check_*.py
+list_*.py
+migrate_*.py
+export_*.py
+query_*.py
+github_to_sqlite.py
+
+# ─── 文档 ───
+*.md
+!README.md
+
+# ─── 临时文件 ───
+*.log
+.DS_Store
+Thumbs.db
+
+# ─── 环境文件（通过 docker-compose 挂载）───
+.env

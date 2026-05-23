@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ContractScan — AI Contract Risk Analyzer</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e4e6f0;
+    --text2: #8b8fa5;
+    --accent: #6366f1;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --green: #22c55e;
+    --blue: #3b82f6;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 40px; border-bottom: 1px solid var(--border);
+  }
+  .logo { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+  .logo span { color: var(--accent); }
+  .badge { font-size: 12px; background: var(--accent); color: #fff; padding: 4px 10px; border-radius: 20px; }
+
+  /* ── Main Layout ── */
+  main { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+
+  /* ── Upload Zone ── */
+  .upload-zone {
+    border: 2px dashed var(--border); border-radius: 16px;
+    padding: 60px 20px; text-align: center; cursor: pointer;
+    transition: all 0.2s; background: var(--card);
+  }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: #1e2040; }
+  .upload-zone h3 { font-size: 20px; margin-bottom: 8px; }
+  .upload-zone p { color: var(--text2); font-size: 14px; margin-bottom: 20px; }
+  .upload-btn {
+    display: inline-block; background: var(--accent); color: #fff;
+    padding: 12px 32px; border-radius: 8px; font-size: 15px; font-weight: 600;
+    cursor: pointer; border: none; transition: opacity 0.2s;
+  }
+  .upload-btn:hover { opacity: 0.85; }
+  .upload-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #fileInput { display: none; }
+
+  /* ── Loading ── */
+  .loading {
+    display: none; text-align: center; padding: 60px 20px;
+  }
+  .spinner {
+    width: 48px; height: 48px; border: 4px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin: 0 auto 20px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading p { color: var(--text2); font-size: 15px; }
+
+  /* ── Error ── */
+  .error-box {
+    display: none; background: #3b1219; color: #fca5a5;
+    border: 1px solid #7f1d1d; border-radius: 12px; padding: 16px 24px;
+    margin-bottom: 24px;
+  }
+
+  /* ── Results ── */
+  .results { display: none; }
+
+  /* Score Card */
+  .score-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px; text-align: center; margin-bottom: 24px;
+  }
+  .score-circle {
+    width: 120px; height: 120px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 42px; font-weight: 800; margin-bottom: 16px;
+  }
+  .score-high { background: #3b1219; color: var(--red); border: 4px solid var(--red); }
+  .score-medium { background: #2d2410; color: var(--yellow); border: 4px solid var(--yellow); }
+  .score-low { background: #0f2818; color: var(--green); border: 4px solid var(--green); }
+  .score-label { font-size: 13px; color: var(--text2); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
+  .summary-text { max-width: 640px; margin: 16px auto 0; line-height: 1.7; color: var(--text2); font-size: 15px; }
+
+  /* Risk Cards */
+  .risk-list { display: flex; flex-direction: column; gap: 16px; }
+  .risk-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px;
+  }
+  .risk-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .risk-level {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 20px; letter-spacing: 1px;
+  }
+  .level-high { background: #3b1219; color: var(--red); }
+  .level-medium { background: #2d2410; color: var(--yellow); }
+  .level-low { background: #0f1a2e; color: var(--blue); }
+  .clause-quote {
+    background: #11131a; border-left: 3px solid var(--accent);
+    padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 12px;
+    font-size: 14px; line-height: 1.6; color: #c0c4d8; font-style: italic;
+  }
+  .risk-section { margin-top: 10px; }
+  .risk-section strong { font-size: 13px; color: var(--text2); display: block; margin-bottom: 2px; }
+  .risk-section p { font-size: 14px; line-height: 1.6; color: var(--text); }
+
+  /* ── Responsive ── */
+  @media (max-width: 640px) {
+    header { padding: 16px 20px; }
+    main { padding: 24px 16px; }
+    .upload-zone { padding: 40px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Contract<span>Scan</span></div>
+  <div class="badge">AI Powered</div>
+</header>
+
+<main>
+  <!-- Upload Zone -->
+  <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+    <h3>Upload a Contract</h3>
+    <p>PDF, PNG, JPEG, or TXT &mdash; Max 50MB</p>
+    <button class="upload-btn" id="uploadBtn">Choose File</button>
+    <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.txt" onchange="handleFile(this.files[0])">
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p id="loadingMsg">Analyzing your contract...</p>
+  </div>
+
+  <!-- Error -->
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <div class="score-card" id="scoreCard"></div>
+    <div class="risk-list" id="riskList"></div>
+  </div>
+</main>
+
+<script>
+// ── Drag & Drop ──
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+// ── File Handling ──
+async function handleFile(file) {
+  if (!file) return;
+  const allowed = ['application/pdf','image/png','image/jpeg','text/plain'];
+  if (!allowed.includes(file.type)) {
+    showError('Unsupported file type: ' + (file.type || 'unknown') + '. Please upload PDF, PNG, JPEG, or TXT.');
+    return;
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    showError('File too large (' + (file.size/1024/1024).toFixed(1) + 'MB). Maximum is 50MB.');
+    return;
+  }
+
+  // Show loading
+  document.getElementById('uploadZone').style.display = 'none';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('errorBox').style.display = 'none';
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('loadingMsg').textContent = 'Analyzing ' + file.name + '...';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const resp = await fetch('/api/analyze', { method: 'POST', body: formData });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.detail || 'Analysis failed');
+    }
+    const data = await resp.json();
+    renderResults(data);
+  } catch (e) {
+    showError(e.message);
+    document.getElementById('uploadZone').style.display = 'block';
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+  }
+}
+
+// ── Render Results ──
+function renderResults(data) {
+  const analysis = data.analysis;
+  const score = analysis.overall_risk_score || 0;
+  const summary = analysis.summary || '';
+  const risks = analysis.risks || [];
+
+  // Score card
+  let level, levelClass;
+  if (score >= 60) { level = 'High Risk'; levelClass = 'score-high'; }
+  else if (score >= 30) { level = 'Medium Risk'; levelClass = 'score-medium'; }
+  else { level = 'Low Risk'; levelClass = 'score-low'; }
+
+  document.getElementById('scoreCard').innerHTML = `
+    <div class="score-label">Overall Risk Score</div>
+    <div class="score-circle ${levelClass}">${score}</div>
+    <h2 style="font-size:18px;margin-bottom:8px;">${level}</h2>
+    <p class="summary-text">${escapeHtml(summary)}</p>
+    <p style="margin-top:12px;font-size:12px;color:var(--text2);">
+      Analyzed <strong>${data.text_length.toLocaleString()}</strong> characters
+      &mdash; found <strong>${risks.length}</strong> risk${risks.length !== 1 ? 's' : ''}
+    </p>
+  `;
+
+  // Risk cards
+  let cardsHtml = '';
+  risks.forEach((r, i) => {
+    const lvl = (r.risk_level || 'low').toLowerCase();
+    const lvlClass = lvl === 'high' ? 'level-high' : lvl === 'medium' ? 'level-medium' : 'level-low';
+    cardsHtml += `
+      <div class="risk-card">
+        <div class="risk-header">
+          <span class="risk-level ${lvlClass}">${lvl.toUpperCase()} Risk</span>
+          <span style="color:var(--text2);font-size:13px;">#${i+1}</span>
+        </div>
+        <div class="clause-quote">${escapeHtml(r.clause_text || '')}</div>
+        <div class="risk-section">
+          <strong>What this means</strong>
+          <p>${escapeHtml(r.explanation || '')}</p>
+        </div>
+        <div class="risk-section" style="margin-top:10px;">
+          <strong>Suggestion</strong>
+          <p>${escapeHtml(r.suggestion || '')}</p>
+        </div>
+      </div>
+    `;
+  });
+
+  if (cardsHtml === '') {
+    cardsHtml = `
+      <div class="risk-card" style="text-align:center;padding:40px;">
+        <p style="color:var(--green);font-size:18px;">No risks detected</p>
+        <p style="color:var(--text2);margin-top:8px;">This contract looks clean. Still review with a lawyer before signing.</p>
+      </div>
+    `;
+  }
+
+  document.getElementById('riskList').innerHTML = cardsHtml;
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+
+</body>
+</html>
