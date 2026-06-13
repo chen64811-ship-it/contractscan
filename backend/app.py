@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from routes.contract_routes import router as contract_router
+from routes.payment_routes import router as payment_router
 
 app = FastAPI(
     title="ContractScan",
@@ -34,6 +35,7 @@ app.add_middleware(
 
 # 注册 API 路由（必须在页面路由之前）
 app.include_router(contract_router)
+app.include_router(payment_router)
 
 # 前端页面
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
