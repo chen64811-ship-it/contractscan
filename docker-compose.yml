@@ -1,6 +1,8 @@
 # ============================================================
 # ContractScan Docker Compose
-# Usage: docker-compose up -d
+# Usage:
+#   1. cp backend/.env.example backend/.env   (then edit it)
+#   2. docker-compose up -d
 # ============================================================
 
 services:
@@ -14,6 +16,5 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./outputs:/app/outputs
-      - ./backend/.env:/app/backend/.env:ro
-    env_file: ./backend/.env
+      - ./backend/.env:/app/.env:ro
     restart: unless-stopped

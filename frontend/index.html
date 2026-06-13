@@ -161,6 +161,38 @@
   }
   .privacy-badge .lock { font-size: 14px; }
 
+  /* ── Paywall ── */
+  .paywall {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px; text-align: center; margin-bottom: 24px;
+  }
+  .paywall .price {
+    font-size: 42px; font-weight: 800; color: var(--accent); margin-bottom: 4px;
+  }
+  .paywall .price-sub { color: var(--text2); font-size: 13px; margin-bottom: 20px; }
+  .paywall .feature-list {
+    text-align: left; display: inline-block; margin-bottom: 20px; line-height: 1.8; font-size: 14px; color: var(--text2);
+  }
+  .paywall .feature-list span { color: var(--green); font-weight: 700; }
+  .unlock-input {
+    display: flex; gap: 8px; max-width: 420px; margin: 0 auto;
+  }
+  .unlock-input input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px; color: var(--text);
+    font-size: 16px; text-align: center; letter-spacing: 4px;
+    text-transform: uppercase;
+  }
+  .unlock-input input:focus { border-color: var(--accent); outline: none; }
+  .unlock-input button {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 8px; padding: 12px 24px; font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  .unlock-input button:hover { opacity: 0.85; }
+  .unlock-input button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .unlock-error { color: var(--red); font-size: 13px; margin-top: 8px; display: none; }
+  .unlock-success { color: var(--green); font-size: 13px; margin-top: 8px; display: none; }
+
   /* ── Results ── */
   .results { display: none; }
 
@@ -280,6 +312,40 @@
   <!-- Results -->
   <div class="results" id="results">
     <div class="score-card" id="scoreCard"></div>
+
+    <!-- 付费墙 -->
+    <div class="paywall" id="paywall" style="display:none;">
+      <div style="margin-bottom:20px;">
+        <div style="font-size:14px;font-weight:600;color:var(--accent);margin-bottom:8px;">UNLOCK FULL REPORT</div>
+        <p style="color:var(--text2);font-size:14px;line-height:1.6;">
+          Get detailed clause issues, missing provisions, and negotiation suggestions.
+        </p>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-bottom:24px;">
+        <div style="flex:1;min-width:160px;background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:20px;">
+          <div style="font-size:13px;color:var(--text2);margin-bottom:4px;">SINGLE REPORT</div>
+          <div style="font-size:28px;font-weight:800;color:var(--accent);margin-bottom:8px;">$4.99</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">One-time · Full access</div>
+          <a href="#" id="buySingle" style="display:block;text-align:center;background:var(--accent);color:#fff;padding:10px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;cursor:pointer;transition:opacity 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'" onclick="handleBuy('single');return false;">Buy Now</a>
+        </div>
+        <div style="flex:1;min-width:160px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;">
+          <div style="font-size:13px;color:var(--text2);margin-bottom:4px;">PRO MONTHLY</div>
+          <div style="font-size:28px;font-weight:800;color:var(--text);margin-bottom:8px;">$29<span style="font-size:14px;font-weight:400;color:var(--text2);">/mo</span></div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">200 analyses · Priority</div>
+          <a href="#" id="buyPro" style="display:block;text-align:center;background:var(--card);color:var(--text);border:1px solid var(--border);padding:10px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;cursor:pointer;transition:border-color 0.2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'" onclick="handleBuy('pro');return false;">Subscribe</a>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;">
+        <p style="color:var(--text2);font-size:13px;margin-bottom:8px;">Already have an unlock code?</p>
+        <div class="unlock-input">
+          <input type="text" id="unlockCode" placeholder="Enter unlock code" maxlength="20" autocomplete="off">
+          <button id="unlockBtn" onclick="unlockReport()">Unlock</button>
+        </div>
+        <div class="unlock-error" id="unlockError"></div>
+        <div class="unlock-success" id="unlockSuccess"></div>
+      </div>
+    </div>
+
     <div class="risk-list" id="riskList"></div>
     <div class="action-bar" id="actionBar" style="display:none;">
       <button class="action-btn primary" onclick="copyReport()">Copy Report</button>
@@ -329,6 +395,8 @@ const LOADING_MESSAGES = [
   "Generating suggestions&hellip;",
 ];
 let loadingInterval = null;
+let currentAnalysisId = null;   // 当前分析的 ID，用于解锁
+let currentFreeData = null;     // 缓存免费版数据（用于重新渲染）
 
 function startLoading() {
   let i = 0;
@@ -341,6 +409,22 @@ function startLoading() {
 
 function stopLoading() {
   if (loadingInterval) { clearInterval(loadingInterval); loadingInterval = null; }
+}
+
+// ── Payment Handler ──
+// Set these URLs in your .env: PAYMENT_SINGLE_URL, PAYMENT_PRO_URL
+const PAYMENT_URLS = {
+  single: 'PAYMENT_SINGLE_PLACEHOLDER',
+  pro: 'PAYMENT_PRO_PLACEHOLDER'
+};
+
+function handleBuy(plan) {
+  const url = PAYMENT_URLS[plan];
+  if (!url || url === 'PAYMENT_SINGLE_PLACEHOLDER') {
+    alert('Payment coming soon. Email sales@contractscan.ai for early access.');
+    return;
+  }
+  window.open(url, '_blank');
 }
 
 // ── Tab Switching ──
@@ -360,8 +444,15 @@ function switchTab(tab) {
     tabPaste.className = 'tab-btn tab-active';
     tabUpload.className = 'tab-btn tab-inactive';
   }
+  currentAnalysisId = null;
+  currentFreeData = null;
   document.getElementById('results').style.display = 'none';
+  document.getElementById('paywall').style.display = 'none';
+  document.getElementById('riskList').innerHTML = '';
+  document.getElementById('actionBar').style.display = 'none';
   document.getElementById('errorBox').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('pasteText').value = '';
 }
 
 // ── Demo Contract ──
@@ -476,12 +567,20 @@ async function handleFile(file) {
 
 // ── Render Results ──
 function renderResults(data) {
+  const isFree = data.is_free !== false;  // 免费版 or 完整版
   const analysis = data.analysis;
   const score = analysis.overall_risk_score || 0;
   const summary = analysis.summary || '';
   const risks = analysis.risks || [];
   const missing = analysis.missing_clauses || [];
-  const totalIssues = risks.length + missing.length;
+  const risksCount = analysis.risks_count != null ? analysis.risks_count : risks.length;
+  const missingCount = analysis.missing_count != null ? analysis.missing_count : missing.length;
+
+  // 缓存数据用于解锁后重渲染
+  if (isFree) {
+    currentFreeData = data;
+    currentAnalysisId = data.analysis_id || null;
+  }
 
   let level, levelClass, benchmark;
   if (score >= 60) {
@@ -499,8 +598,8 @@ function renderResults(data) {
   }
 
   const issueBreakdown = [
-    risks.length > 0 ? `<strong>${risks.length}</strong> clause issue${risks.length !== 1 ? 's' : ''}` : '',
-    missing.length > 0 ? `<strong>${missing.length}</strong> missing provision${missing.length !== 1 ? 's' : ''}` : '',
+    risksCount > 0 ? `<strong>${risksCount}</strong> clause issue${risksCount !== 1 ? 's' : ''}` : '',
+    missingCount > 0 ? `<strong>${missingCount}</strong> missing provision${missingCount !== 1 ? 's' : ''}` : '',
   ].filter(Boolean).join(' &mdash; ');
 
   document.getElementById('scoreCard').innerHTML = `
@@ -517,73 +616,139 @@ function renderResults(data) {
     </p>
   `;
 
-  // Build risk cards + missing clause cards
-  let html = '';
+  // 付费墙：免费版隐藏详细结果
+  const paywall = document.getElementById('paywall');
+  if (isFree && (risksCount > 0 || missingCount > 0)) {
+    paywall.style.display = 'block';
+    document.getElementById('riskList').innerHTML = '';
+    document.getElementById('actionBar').style.display = 'none';
+    // 重置解锁输入
+    document.getElementById('unlockCode').value = '';
+    document.getElementById('unlockError').style.display = 'none';
+    document.getElementById('unlockSuccess').style.display = 'none';
+    document.getElementById('unlockBtn').disabled = false;
+  } else {
+    paywall.style.display = 'none';
+    // 渲染详细条款
+    let html = '';
 
-  // Section: Clause Issues
-  if (risks.length > 0) {
-    html += '<div class="section-title">Clause Issues</div>';
-    risks.forEach((r, i) => {
-      const lvl = (r.risk_level || 'low').toLowerCase();
-      const lvlClass = lvl === 'high' ? 'level-high' : lvl === 'medium' ? 'level-medium' : 'level-low';
-      html += `
-        <div class="risk-card">
-          <div class="risk-header">
-            <span class="risk-level ${lvlClass}">${lvl.toUpperCase()}</span>
-            <span style="color:var(--text2);font-size:13px;">#${i+1}</span>
+    if (risks.length > 0) {
+      html += '<div class="section-title">Clause Issues</div>';
+      risks.forEach((r, i) => {
+        const lvl = (r.risk_level || 'low').toLowerCase();
+        const lvlClass = lvl === 'high' ? 'level-high' : lvl === 'medium' ? 'level-medium' : 'level-low';
+        html += `
+          <div class="risk-card">
+            <div class="risk-header">
+              <span class="risk-level ${lvlClass}">${lvl.toUpperCase()}</span>
+              <span style="color:var(--text2);font-size:13px;">#${i+1}</span>
+            </div>
+            <div class="clause-quote">${escapeHtml(r.clause_text || '')}</div>
+            <div class="risk-section">
+              <strong>What this means</strong>
+              <p>${escapeHtml(r.explanation || '')}</p>
+            </div>
+            <div class="risk-section" style="margin-top:10px;">
+              <strong>Suggested fix</strong>
+              <p>${escapeHtml(r.suggestion || '')}</p>
+            </div>
           </div>
-          <div class="clause-quote">${escapeHtml(r.clause_text || '')}</div>
-          <div class="risk-section">
-            <strong>What this means</strong>
-            <p>${escapeHtml(r.explanation || '')}</p>
+        `;
+      });
+    }
+
+    if (missing.length > 0) {
+      html += '<div class="section-title">Missing Provisions</div>';
+      missing.forEach((m, i) => {
+        const lvl = (m.risk_level || 'low').toLowerCase();
+        const lvlClass = lvl === 'high' ? 'level-high' : lvl === 'medium' ? 'level-medium' : 'level-low';
+        html += `
+          <div class="missing-card">
+            <div class="risk-header" style="margin-bottom:8px;">
+              <span class="risk-level ${lvlClass}">MISSING</span>
+              <span class="clause-name">${escapeHtml(m.clause_name || 'Unnamed Clause')}</span>
+            </div>
+            <div class="risk-section">
+              <strong>Why this matters</strong>
+              <p>${escapeHtml(m.why_matters || '')}</p>
+            </div>
+            <div class="risk-section" style="margin-top:10px;">
+              <strong>Suggested language</strong>
+              <p style="font-style:italic;color:#c0c4d8;">${escapeHtml(m.suggested_language || '')}</p>
+            </div>
           </div>
-          <div class="risk-section" style="margin-top:10px;">
-            <strong>Suggested fix</strong>
-            <p>${escapeHtml(r.suggestion || '')}</p>
-          </div>
+        `;
+      });
+    }
+
+    if (html === '') {
+      html = `
+        <div class="risk-card" style="text-align:center;padding:40px;">
+          <p style="color:var(--green);font-size:18px;">No issues detected</p>
+          <p style="color:var(--text2);margin-top:8px;">This contract appears complete and balanced. Still review with counsel before signing.</p>
         </div>
       `;
-    });
+    }
+
+    document.getElementById('riskList').innerHTML = html;
+    document.getElementById('actionBar').style.display = 'flex';
   }
 
-  // Section: Missing Provisions
-  if (missing.length > 0) {
-    html += '<div class="section-title">Missing Provisions</div>';
-    missing.forEach((m, i) => {
-      const lvl = (m.risk_level || 'low').toLowerCase();
-      const lvlClass = lvl === 'high' ? 'level-high' : lvl === 'medium' ? 'level-medium' : 'level-low';
-      html += `
-        <div class="missing-card">
-          <div class="risk-header" style="margin-bottom:8px;">
-            <span class="risk-level ${lvlClass}">MISSING</span>
-            <span class="clause-name">${escapeHtml(m.clause_name || 'Unnamed Clause')}</span>
-          </div>
-          <div class="risk-section">
-            <strong>Why this matters</strong>
-            <p>${escapeHtml(m.why_matters || '')}</p>
-          </div>
-          <div class="risk-section" style="margin-top:10px;">
-            <strong>Suggested language</strong>
-            <p style="font-style:italic;color:#c0c4d8;">${escapeHtml(m.suggested_language || '')}</p>
-          </div>
-        </div>
-      `;
-    });
-  }
-
-  if (html === '') {
-    html = `
-      <div class="risk-card" style="text-align:center;padding:40px;">
-        <p style="color:var(--green);font-size:18px;">No issues detected</p>
-        <p style="color:var(--text2);margin-top:8px;">This contract appears complete and balanced. Still review with counsel before signing.</p>
-      </div>
-    `;
-  }
-
-  document.getElementById('riskList').innerHTML = html;
-  document.getElementById('actionBar').style.display = 'flex';
   document.getElementById('results').style.display = 'block';
   document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ── 解锁完整报告 ──
+async function unlockReport() {
+  const codeInput = document.getElementById('unlockCode');
+  const unlockBtn = document.getElementById('unlockBtn');
+  const errorEl = document.getElementById('unlockError');
+  const successEl = document.getElementById('unlockSuccess');
+
+  const code = codeInput.value.trim();
+  if (!code) {
+    errorEl.textContent = 'Please enter your unlock code';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  if (!currentAnalysisId) {
+    errorEl.textContent = 'Session expired. Please re-upload your contract.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  errorEl.style.display = 'none';
+  successEl.style.display = 'none';
+  unlockBtn.disabled = true;
+  unlockBtn.textContent = 'Verifying...';
+
+  try {
+    const resp = await fetch('/api/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        analysis_id: currentAnalysisId,
+        unlock_code: code
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.detail || 'Unlock failed');
+    }
+
+    const fullData = await resp.json();
+    successEl.textContent = 'Unlocked! Showing full report below.';
+    successEl.style.display = 'block';
+    document.getElementById('paywall').style.display = 'none';
+    renderResults(fullData);
+  } catch (e) {
+    errorEl.textContent = e.message;
+    errorEl.style.display = 'block';
+    unlockBtn.disabled = false;
+    unlockBtn.textContent = 'Unlock';
+  }
 }
 
 // ── Copy Report ──
@@ -600,12 +765,19 @@ function copyReport() {
 
 // ── Analyze Another ──
 function analyzeAnother() {
+  currentAnalysisId = null;
+  currentFreeData = null;
   document.getElementById('results').style.display = 'none';
+  document.getElementById('paywall').style.display = 'none';
+  document.getElementById('riskList').innerHTML = '';
+  document.getElementById('actionBar').style.display = 'none';
   document.getElementById('errorBox').style.display = 'none';
   document.getElementById('pasteZone').style.display = 'none';
   document.getElementById('uploadZone').style.display = 'block';
   document.getElementById('tabUpload').className = 'tab-btn tab-active';
   document.getElementById('tabPaste').className = 'tab-btn tab-inactive';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('pasteText').value = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
