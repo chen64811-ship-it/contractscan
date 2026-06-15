@@ -412,15 +412,28 @@ function stopLoading() {
 }
 
 // ── Payment Handler ──
-// Set these URLs in your .env: PAYMENT_SINGLE_URL, PAYMENT_PRO_URL
-const PAYMENT_URLS = {
-  single: 'PAYMENT_SINGLE_PLACEHOLDER',
-  pro: 'PAYMENT_PRO_PLACEHOLDER'
+// Payment URLs are fetched from /api/config on page load
+let PAYMENT_URLS = {
+  single: '',
+  pro: ''
 };
+
+(async function loadPaymentConfig() {
+  try {
+    const resp = await fetch('/api/config');
+    const cfg = await resp.json();
+    PAYMENT_URLS = {
+      single: cfg.payment_single_url || '',
+      pro: cfg.payment_pro_url || ''
+    };
+  } catch(e) {
+    console.warn('Failed to load payment config:', e);
+  }
+})();
 
 function handleBuy(plan) {
   const url = PAYMENT_URLS[plan];
-  if (!url || url === 'PAYMENT_SINGLE_PLACEHOLDER') {
+  if (!url) {
     alert('Payment coming soon. Email sales@contractscan.ai for early access.');
     return;
   }

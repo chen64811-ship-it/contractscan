@@ -324,3 +324,12 @@ async def unlock_report(req: UnlockRequest, _rl=Depends(_rate_limit_unlock)):
 async def health():
     """Health check endpoint."""
     return {"status": "ok", "service": "ContractScan"}
+
+
+@router.get("/config")
+async def public_config():
+    """Public config for the frontend (non-sensitive)."""
+    return {
+        "payment_single_url": os.getenv("PAYMENT_SINGLE_URL", ""),
+        "payment_pro_url": os.getenv("PAYMENT_PRO_URL", ""),
+    }
