@@ -53,6 +53,48 @@ cp .env.example backend/.env
 docker-compose up -d
 ```
 
+Notes:
+- The compose file now includes a MySQL service (`mysql`) used by the backend.
+- The container will attempt to run Alembic migrations on startup. To run migrations manually:
+
+```bash
+# Run migrations (when database is ready)
+docker-compose run --rm contractscan sh -c "alembic -c backend/alembic.ini upgrade head"
+```
+
+If you prefer to customize DB credentials, edit `backend/.env` (the `DATABASE_URL` setting) before starting.
+
+Backup & Restore
+-----------------
+
+Create a backup (requires Docker running):
+
+```bash
+./backend/scripts/backup_mysql.sh
+```
+
+Restore from backup:
+
+```bash
+./backend/scripts/restore_mysql.sh backups/contractscan_YYYYmmddHHMMSS.sql.gz
+```
+
+CI Migrations
+-------------
+
+The repository includes a GitHub Actions workflow `.github/workflows/ci-migrations.yml` which runs Alembic migrations against a test MySQL service to ensure migrations apply cleanly.
+
+Local demo
+----------
+
+Start everything and wait for the service health:
+
+```bash
+./backend/scripts/local_demo.sh
+```
+
+This will start `docker-compose`, wait until the backend reports healthy, and print the health endpoint output.
+
 ### Option 3: OCR support (GPU)
 
 For scanned/image-based PDFs, install PaddleOCR with GPU:

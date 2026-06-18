@@ -16,6 +16,7 @@ ENV PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -y --fix-missing && apt-get install -y --no-install-recommends \
+    curl \
     libgl1-mesa-glx \
     libglib2.0-0 \
     libsm6 \
@@ -39,4 +40,4 @@ RUN mkdir -p /app/uploads /app/outputs
 
 EXPOSE 8000
 
-CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "alembic -c backend/alembic.ini upgrade head || true; uvicorn backend.app:app --host 0.0.0.0 --port 8000"]

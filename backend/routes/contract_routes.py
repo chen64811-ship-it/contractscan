@@ -10,12 +10,17 @@ import uuid
 import hashlib
 import time
 from pathlib import Path
+from datetime import datetime
 
 from pydantic import BaseModel
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Depends
 from fastapi.responses import FileResponse
 
 from rate_limiter import analyze_limiter, debug_limiter, unlock_limiter
+from sqlalchemy.orm import Session
+from db import get_db, SessionLocal
+from models import File, Analysis, UnlockCode
+import json
 
 
 class TextRequest(BaseModel):
@@ -47,9 +52,6 @@ ALLOWED_TYPES = {
 }
 MAX_SIZE = 50 * 1024 * 1024  # 50MB
 
-# Analysis cache (in-memory, lost on restart)
-# {analysis_id: {"full_result": {...}, "created_at": timestamp}}
-_ANALYSIS_CACHE: dict[str, dict] = {}
 _CACHE_TTL = 3600  # 1 hour cache
 
 # Unlock codes: loaded from env UNLOCK_CODES (comma-separated)
@@ -97,20 +99,9 @@ def _get_llm_config() -> tuple[str, str, str]:
     return api_key, api_base, model
 
 
-def _cache_analysis(full_result: dict) -> str:
-    """缓存分析结果，返回 analysis_id（8位短码）"""
-    analysis_id = hashlib.sha256(
-        f"{full_result}_{time.time()}_{uuid.uuid4()}".encode()
-    ).hexdigest()[:8]
-    _ANALYSIS_CACHE[analysis_id] = {
-        "full_result": full_result,
-        "created_at": time.time(),
-    }
-    # 清理过期缓存
-    expired = [k for k, v in _ANALYSIS_CACHE.items() if time.time() - v["created_at"] > _CACHE_TTL]
-    for k in expired:
-        del _ANALYSIS_CACHE[k]
-    return analysis_id
+def _make_analysis_id(full_result: dict) -> str:
+    """生成 analysis_id（8位短码）"""
+    return hashlib.sha256(f"{full_result}_{time.time()}_{uuid.uuid4()}".encode()).hexdigest()[:8]
 
 
 def _make_free_result(full_result: dict) -> dict:
@@ -134,7 +125,7 @@ def _make_free_result(full_result: dict) -> dict:
 
 
 @router.post("/analyze")
-async def analyze(file: UploadFile = File(...), _rl=Depends(_rate_limit_analyze)):
+async def analyze(file: UploadFile = File(...), _rl=Depends(_rate_limit_analyze), db: Session = Depends(get_db)):
     """
     Upload contract file, return risk analysis result.
     Supports PDF / PNG / JPEG / TXT.
@@ -181,20 +172,42 @@ async def analyze(file: UploadFile = File(...), _rl=Depends(_rate_limit_analyze)
     except Exception as e:
         raise HTTPException(500, f"AI 分析失败：{str(e)}")
 
-    # 7. 缓存完整结果，返回免费版
+    # 7. 保存完整结果到 outputs/ 并写入数据库，返回免费版
     full_result = {
         "file_id": file_id,
         "filename": file.filename,
         "text_length": len(cleaned_text),
         "analysis": result,
     }
-    analysis_id = _cache_analysis(full_result)
+
+    analysis_id = _make_analysis_id(full_result)
     full_result["analysis_id"] = analysis_id
+
+    # 写入 outputs/{analysis_id}.json
+    out_path = OUTPUT_DIR / f"{analysis_id}.json"
+    try:
+        out_path.write_text(json.dumps(full_result, ensure_ascii=False))
+    except Exception as e:
+        raise HTTPException(500, f"无法写入输出文件：{e}")
+
+    # 创建 File / Analysis 记录
+    try:
+        db_file = File(filename=save_name, content_type=file.content_type, path=str(save_path), size=len(content))
+        db.add(db_file)
+        db.flush()
+
+        analysis_row = Analysis(file_id=db_file.id, analysis_id=analysis_id, summary=result.get("summary", ""), full_result_path=str(out_path), created_at=datetime.utcnow(), is_free=True)
+        db.add(analysis_row)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"数据库写入失败：{e}")
+
     return _make_free_result(full_result)
 
 
 @router.post("/analyze-text")
-async def analyze_text(req: TextRequest, _rl=Depends(_rate_limit_analyze)):
+async def analyze_text(req: TextRequest, _rl=Depends(_rate_limit_analyze), db: Session = Depends(get_db)):
     """
     Analyze pasted text (no file upload).
     """
@@ -211,15 +224,30 @@ async def analyze_text(req: TextRequest, _rl=Depends(_rate_limit_analyze)):
     except Exception as e:
         raise HTTPException(500, f"AI 分析失败：{str(e)}")
 
-    # 缓存完整结果，返回免费版
+    # 保存完整结果并记录到数据库
     full_result = {
         "file_id": "pasted",
         "filename": "pasted-text.txt",
         "text_length": len(text),
         "analysis": result,
     }
-    analysis_id = _cache_analysis(full_result)
+    analysis_id = _make_analysis_id(full_result)
     full_result["analysis_id"] = analysis_id
+
+    out_path = OUTPUT_DIR / f"{analysis_id}.json"
+    try:
+        out_path.write_text(json.dumps(full_result, ensure_ascii=False))
+    except Exception as e:
+        raise HTTPException(500, f"无法写入输出文件：{e}")
+
+    try:
+        analysis_row = Analysis(file_id=None, analysis_id=analysis_id, summary=result.get("summary", ""), full_result_path=str(out_path), created_at=datetime.utcnow(), is_free=True)
+        db.add(analysis_row)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"数据库写入失败：{e}")
+
     return _make_free_result(full_result)
 
 
@@ -277,34 +305,54 @@ async def debug_analyze(req: TextRequest, _rl=Depends(_rate_limit_debug)):
 
 
 @router.post("/unlock")
-async def unlock_report(req: UnlockRequest, _rl=Depends(_rate_limit_unlock)):
+async def unlock_report(req: UnlockRequest, _rl=Depends(_rate_limit_unlock), db: Session = Depends(get_db)):
     """
     Verify unlock code and return full report.
     Codes can be single-use or multi-use (prefixed with * in UNLOCK_CODES).
     """
     global _VALID_CODES, _USED_CODES
 
-    # 1. Validate unlock code
     code = req.unlock_code.strip().upper()
     code_info = _VALID_CODES.get(code)
+
+    # If not an env-provided code, try DB-stored unlock codes
+    db_code = None
     if code_info is None:
-        raise HTTPException(403, "Invalid unlock code. Please check and try again.")
+        db_code = db.query(UnlockCode).filter(UnlockCode.code == code).first()
+        if not db_code:
+            raise HTTPException(403, "Invalid unlock code. Please check and try again.")
+        is_multi_use = bool(db_code.is_multi_use)
+        # expire check
+        if (datetime.utcnow() - db_code.created_at).total_seconds() > _CODE_TTL:
+            raise HTTPException(403, "This unlock code has expired.")
+    else:
+        is_multi_use = code_info
+        if not is_multi_use and code in _USED_CODES:
+            raise HTTPException(403, "This code has already been used.")
 
-    is_multi_use = code_info  # True = multi-use, False = single-use
+    # Lookup analysis from DB
+    analysis_row = db.query(Analysis).filter(Analysis.analysis_id == req.analysis_id).first()
+    if not analysis_row:
+        raise HTTPException(404, "Analysis report not found or expired.")
 
-    if not is_multi_use and code in _USED_CODES:
-        raise HTTPException(403, "This code has already been used.")
+    # Load full JSON from outputs
+    try:
+        full = json.loads(Path(analysis_row.full_result_path).read_text())
+    except Exception:
+        raise HTTPException(500, "无法读取完整报告文件")
 
-    # 2. Look up cached analysis
-    cached = _ANALYSIS_CACHE.get(req.analysis_id)
-    if not cached:
-        raise HTTPException(404, "Analysis report expired (>1 hour). Please re-upload your contract.")
+    # Mark single-use env code as used in memory, or delete single-use DB code
+    if db_code:
+        if not is_multi_use:
+            try:
+                db.delete(db_code)
+                db.commit()
+            except Exception:
+                db.rollback()
+    else:
+        if not is_multi_use:
+            _USED_CODES.add(code)
 
-    # 3. Mark single-use code as used
-    if not is_multi_use:
-        _USED_CODES.add(code)
-
-    full = cached["full_result"]
     analysis = full.get("analysis", {})
     return {
         "file_id": full.get("file_id", ""),
@@ -322,8 +370,20 @@ async def unlock_report(req: UnlockRequest, _rl=Depends(_rate_limit_unlock)):
 
 @router.get("/health")
 async def health():
-    """Health check endpoint."""
-    return {"status": "ok", "service": "ContractScan"}
+    """Health check endpoint. Checks DB connectivity when configured."""
+    # If DB not configured, return basic healthy status
+    try:
+        if SessionLocal is None:
+            return {"status": "ok", "service": "ContractScan", "db": "not configured"}
+        # try a lightweight query
+        db = SessionLocal()
+        try:
+            db.execute("SELECT 1")
+            return {"status": "ok", "service": "ContractScan", "db": "ok"}
+        finally:
+            db.close()
+    except Exception as e:
+        return {"status": "fail", "service": "ContractScan", "db": str(e)}
 
 
 @router.get("/config")

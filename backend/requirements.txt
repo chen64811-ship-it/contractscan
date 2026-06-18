@@ -28,3 +28,8 @@ aiofiles>=23.0.0
 # Testing
 pytest>=7.0.0
 pytest-cov>=4.0.0
+
+# Database (MySQL)
+SQLAlchemy>=1.4.0
+pymysql>=1.0.2
+alembic>=1.11.0

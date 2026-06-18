@@ -17,4 +17,38 @@ services:
       - ./uploads:/app/uploads
       - ./outputs:/app/outputs
       - ./backend/.env:/app/.env:ro
+    environment:
+      # Default DATABASE_URL; override in backend/.env for production secrets
+      - DATABASE_URL=mysql+pymysql://contract_user:contract_pass@mysql:3306/contractscan
     restart: unless-stopped
+    depends_on:
+      - mysql
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mysql:
+    image: mysql:8.0
+    container_name: contractscan_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: contractscan
+      MYSQL_USER: contract_user
+      MYSQL_PASSWORD: contract_pass
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./backend:/app/backend:ro
+      - ./backups:/backups
+
+volumes:
+  mysql_data:

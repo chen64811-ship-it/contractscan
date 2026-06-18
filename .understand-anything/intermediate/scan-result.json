@@ -1,0 +1,160 @@
+{
+  "name": "contractscan",
+  "description": "ContractScan 是一款基于 FastAPI 的 AI 合同风险审查工具，支持上传 PDF、图片和纯文本合同文件，通过 PaddleOCR 进行文字识别，并调用兼容 OpenAI 接口的大语言模型自动识别风险条款与缺失条款，生成结构化分析报告。项目提供 Docker 容器化部署方案。",
+  "languages": [
+    "config",
+    "dockerfile",
+    "html",
+    "python",
+    "yaml"
+  ],
+  "frameworks": [
+    "Docker",
+    "Docker Compose",
+    "Fastapi",
+    "Openai",
+    "Paddleocr",
+    "Pymupdf",
+    "Pytest",
+    "Uvicorn"
+  ],
+  "files": [
+    {
+      "path": ".dockerignore",
+      "language": "config",
+      "sizeLines": 51,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".env.example",
+      "language": "config",
+      "sizeLines": 18,
+      "fileCategory": "config"
+    },
+    {
+      "path": "backend/app.py",
+      "language": "python",
+      "sizeLines": 52,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/config.py",
+      "language": "python",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/config_manager.py",
+      "language": "python",
+      "sizeLines": 75,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/progress_store.py",
+      "language": "python",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/requirements.txt",
+      "language": "config",
+      "sizeLines": 30,
+      "fileCategory": "config"
+    },
+    {
+      "path": "backend/routes/contract_routes.py",
+      "language": "python",
+      "sizeLines": 190,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/cleaner_service.py",
+      "language": "python",
+      "sizeLines": 133,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/contract_analyzer.py",
+      "language": "python",
+      "sizeLines": 159,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/extractor_service.py",
+      "language": "python",
+      "sizeLines": 595,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/ocr_service.py",
+      "language": "python",
+      "sizeLines": 240,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/pdf_service.py",
+      "language": "python",
+      "sizeLines": 269,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docker-compose.yml",
+      "language": "yaml",
+      "sizeLines": 19,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "Dockerfile",
+      "language": "dockerfile",
+      "sizeLines": 42,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "Dockerfile.gpu",
+      "language": "dockerfile",
+      "sizeLines": 59,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "frontend/index.html",
+      "language": "html",
+      "sizeLines": 633,
+      "fileCategory": "markup"
+    }
+  ],
+  "totalFiles": 17,
+  "filteredByIgnore": 0,
+  "estimatedComplexity": "small",
+  "importMap": {
+    ".dockerignore": [],
+    ".env.example": [],
+    "Dockerfile": [],
+    "Dockerfile.gpu": [],
+    "backend/app.py": [
+      "backend/routes/contract_routes.py"
+    ],
+    "backend/config.py": [],
+    "backend/config_manager.py": [],
+    "backend/progress_store.py": [],
+    "backend/requirements.txt": [],
+    "backend/routes/contract_routes.py": [
+      "backend/services/cleaner_service.py",
+      "backend/services/contract_analyzer.py",
+      "backend/services/extractor_service.py",
+      "backend/services/ocr_service.py"
+    ],
+    "backend/services/cleaner_service.py": [],
+    "backend/services/contract_analyzer.py": [],
+    "backend/services/extractor_service.py": [
+      "backend/config.py",
+      "backend/progress_store.py",
+      "backend/services/ocr_service.py"
+    ],
+    "backend/services/ocr_service.py": [
+      "backend/config.py"
+    ],
+    "backend/services/pdf_service.py": [],
+    "docker-compose.yml": [],
+    "frontend/index.html": []
+  }
+}

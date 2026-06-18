@@ -1,89 +1,60 @@
-"""
-Lemon Squeezy payment webhook handler.
-Receives order.created events, auto-generates unlock codes, stores them.
+"""Lemon Squeezy payment webhook handler.
+Receives order.created events, auto-generates unlock codes, stores them in MySQL via SQLAlchemy.
 """
 import os
 import hmac
 import hashlib
-import json
 import secrets
-import time
-from pathlib import Path
+from datetime import datetime
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Depends
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+
+from db import get_db
+from models import UnlockCode, Order
 
 router = APIRouter(prefix="/api/payment")
 
-# In-memory code store: code -> {created_at, email, variant_name}
-# Survives restarts? No. For production, use SQLite/Postgres.
-_CODE_STORE: dict[str, dict] = {}
+# TTL for codes (seconds)
 _CODE_TTL = 604800  # 7 days
 
 # Load webhook secret
 _WEBHOOK_SECRET = os.getenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "")
 
-# File-based persistence fallback
-_STORE_PATH = Path(__file__).resolve().parent.parent.parent / "outputs" / ".codes.json"
-
 
 def _generate_code() -> str:
-    """Generate a human-readable unlock code like XKCD style."""
-    return secrets.token_hex(4).upper()  # e.g. "A3F8B2C1"
-
-
-def _save_store():
-    """Persist codes to disk."""
-    try:
-        data = {
-            k: {**v, "created_at": v["created_at"]}
-            for k, v in _CODE_STORE.items()
-        }
-        _STORE_PATH.write_text(json.dumps(data))
-    except Exception:
-        pass
-
-
-def _load_store():
-    """Load persisted codes from disk."""
-    if _STORE_PATH.exists():
-        try:
-            data = json.loads(_STORE_PATH.read_text())
-            for k, v in data.items():
-                _CODE_STORE[k] = v
-        except Exception:
-            pass
-
-
-# Load on startup
-_load_store()
+    """Generate a short unlock code."""
+    return secrets.token_hex(4).upper()
 
 
 def _verify_signature(body: bytes, signature: str) -> bool:
     """Verify Lemon Squeezy webhook signature."""
     if not _WEBHOOK_SECRET:
-        return True  # No secret configured — skip verification (dev mode)
-    expected = hmac.new(
-        _WEBHOOK_SECRET.encode(), body, hashlib.sha256
-    ).hexdigest()
+        return True
+    expected = hmac.new(_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
 
 
 @router.post("/webhook")
-async def lemon_squeezy_webhook(request: Request):
-    """
-    Receive order.created events from Lemon Squeezy.
-    Auto-generates an unlock code and stores it.
-    """
+async def lemon_squeezy_webhook(request: Request, db: Session = Depends(get_db)):
+    """Handle webhook, create Order and UnlockCode records."""
     body = await request.body()
     signature = request.headers.get("X-Signature", "")
 
     if not _verify_signature(body, signature):
         raise HTTPException(401, "Invalid webhook signature")
 
+    payload = None
     try:
-        payload = json.loads(body)
-    except json.JSONDecodeError:
-        raise HTTPException(400, "Invalid JSON body")
+        payload = await request.json()
+    except Exception:
+        # Try robust JSON parsing from body bytes
+        try:
+            import json as _json
+            payload = _json.loads(body)
+        except Exception:
+            raise HTTPException(400, "Invalid JSON body")
 
     event_name = payload.get("meta", {}).get("event_name", "")
     if event_name != "order_created":
@@ -95,80 +66,66 @@ async def lemon_squeezy_webhook(request: Request):
     variant_name = attrs.get("variant_name", attrs.get("product_name", "Unknown Product"))
     order_id = str(data.get("id", "unknown"))
 
-    # Check if this order already has a code
-    for code, info in _CODE_STORE.items():
-        if info.get("order_id") == order_id:
-            return {"status": "duplicate", "code": code}
+    # If an unlock code already exists for this order, return it
+    existing = db.query(UnlockCode).filter(UnlockCode.order_id == order_id).first()
+    if existing:
+        return {"status": "duplicate", "code": existing.code}
 
-    # Generate unlock code
+    # Create order record if not exists
+    order = db.query(Order).filter(Order.order_id == order_id).first()
+    if not order:
+        order = Order(order_id=order_id, email=email, variant_name=variant_name)
+        db.add(order)
+
+    # Create unlock code
     code = _generate_code()
-    _CODE_STORE[code] = {
-        "created_at": time.time(),
-        "email": email,
-        "variant_name": variant_name,
-        "order_id": order_id,
-    }
-    _save_store()
+    unlock = UnlockCode(code=code, created_at=datetime.utcnow(), email=email, order_id=order_id, is_multi_use=False)
+    db.add(unlock)
+    db.commit()
 
     print(f"[Payment] New unlock code: {code} for {email} ({variant_name})")
 
-    return {
-        "status": "ok",
-        "code": code,
-        "email": email,
-        "product": variant_name,
-    }
+    return {"status": "ok", "code": code, "email": email, "product": variant_name}
 
 
 @router.get("/codes")
-async def list_codes(key: str = ""):
-    """
-    List all active unlock codes. Requires admin key (ADMIN_KEY env var).
-    """
+async def list_codes(key: str = "", db: Session = Depends(get_db)):
+    """Admin: list active unlock codes."""
     admin_key = os.getenv("ADMIN_KEY", "")
     if not admin_key or key != admin_key:
         raise HTTPException(403, "Invalid admin key")
-    
-    now = time.time()
+
+    now = datetime.utcnow()
+    codes = db.query(UnlockCode).all()
     active = []
-    for code, info in _CODE_STORE.items():
-        age_hours = (now - info["created_at"]) / 3600
+    for c in codes:
+        age_hours = (now - c.created_at).total_seconds() / 3600
+        # Look up product via Order if available
+        product = None
+        if c.order_id:
+            ord_row = db.query(Order).filter(Order.order_id == c.order_id).first()
+            product = ord_row.variant_name if ord_row else None
         active.append({
-            "code": code,
-            "email": info["email"],
-            "product": info["variant_name"],
+            "code": c.code,
+            "email": c.email,
+            "product": product,
             "age_hours": round(age_hours, 1),
         })
-    return {"codes": sorted(active, key=lambda x: x["age_hours"])}
+
+    return {"codes": sorted(active, key=lambda x: x["age_hours"]) }
 
 
 @router.get("/success")
-async def payment_success(email: str = ""):
-    """
-    Payment success redirect page.
-    Looks up unlock code by email and shows it.
-    Set this as Lemon Squeezy checkout success URL:
-      https://your-domain.com/api/payment/success?email={email}
-    """
+async def payment_success(email: str = "", db: Session = Depends(get_db)):
+    """Lookup most recent unlock code by email."""
     if not email:
         return {"status": "ok", "message": "Payment received! Check your email for the unlock code."}
-    
-    # Find most recent code for this email
-    now = time.time()
-    best_code = None
-    for code, info in _CODE_STORE.items():
-        if info.get("email", "").lower() == email.lower():
-            if now - info["created_at"] < _CODE_TTL:
-                if best_code is None or info["created_at"] > _CODE_STORE[best_code]["created_at"]:
-                    best_code = code
-    
-    if best_code:
-        return {
-            "status": "ok",
-            "code": best_code,
-        }
-    
-    return {
-        "status": "pending",
-        "message": "Payment confirmed. Your unlock code will appear here shortly. Refresh in a few seconds."
-    }
+
+    # Case-insensitive lookup
+    code_row = db.query(UnlockCode).filter(func.lower(UnlockCode.email) == email.lower()).order_by(UnlockCode.created_at.desc()).first()
+
+    if code_row and (datetime.utcnow() - code_row.created_at).total_seconds() < _CODE_TTL:
+        return {"status": "ok", "code": code_row.code}
+
+    return {"status": "pending", "message": "Payment confirmed. Your unlock code will appear here shortly. Refresh in a few seconds."}
+
